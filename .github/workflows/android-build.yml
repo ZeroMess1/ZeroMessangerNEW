@@ -8,22 +8,21 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         
-      - name: Setup Node.js
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'
           cache: 'npm'
           
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
         
       - name: Install Capacitor
-        run: npm install @capacitor/core @capacitor/cli @capacitor/android
+        run: npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps
         
       - name: Build Vite app
         run: npm run build
@@ -37,21 +36,15 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
         
-      - name: Initialize and sync Capacitor
-        run: |
-          npx cap init ZeroMessenger com.zeromessenger.app || true
-          npx cap add android || npx cap sync android
-          npx cap sync android
-          
-      - name: Grant execute permission for gradlew
-        run: chmod +x android/gradlew
-        
       - name: Build APK
         run: |
+          npx cap init ZeroMessenger com.zeromessenger.app
+          npx cap add android
+          npx cap sync android
           cd android
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug
           
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
