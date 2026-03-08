@@ -20,11 +20,11 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
         
-      - name: Install Capacitor (if not installed)
+      - name: Install Capacitor
         run: npm install @capacitor/core @capacitor/cli @capacitor/android --legacy-peer-deps || true
         
       - name: Build Vite app
-        run: npm run build
+        run: npm run build --silent
         
       - name: Setup Java
         uses: actions/setup-java@v4
