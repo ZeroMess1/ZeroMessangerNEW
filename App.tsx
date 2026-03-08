@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react'
-import { MessageSquare, User as UserIcon, Settings, Send, Search } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { MessageSquare, User as UserIcon, Settings, Send, Search, Star } from 'lucide-react'
+import { firestore } from './firebase'
+import { onAuthStateChanged, signOut } from 'firebase/auth'
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
 
 type User = {
   id: string
   email: string
   name: string
-  password: string
   avatar: string
   bio: string
   birthdate: string
@@ -29,7 +31,7 @@ type Message = {
 type Chat = {
   id: string
   recipient: User
-  messages: Message[] | null
+  messages: Message[]
 }
 
 const getRandomAvatar = (id: string) => {
@@ -47,150 +49,186 @@ export default function App() {
   const [showMessageOptions, setShowMessageOptions] = useState<string | null>(null)
   const [deleteOptions, setDeleteOptions] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const messagesUnsubscribe = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     initApp()
+    return () => {
+      if (messagesUnsubscribe.current) messagesUnsubscribe.current()
+    }
   }, [])
 
-  const initApp = async () => {
-    try {
-      const storedAuth = localStorage.getItem('zero_auth')
-      if (storedAuth) {
-        const userData = JSON.parse(storedAuth)
-        setUser(userData)
-      }
-    } catch (e) {
-      console.error('Auth init error:', e)
-    }
+  const initApp = () => {
     setLoading(false)
   }
 
-  const handleLogin = (email: string, password: string) => {
-    const users = JSON.parse(localStorage.getItem('zero_users') || '[]')
-    const found = users.find((u: User) => u.email === email && u.password === password)
-    
-    if (found) {
-      setUser(found)
-      localStorage.setItem('zero_auth', JSON.stringify(found))
+  const handleLogin = async (email: string, password: string) => {
+    try {
+      const auth = getAuth()
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      const userData = await firestore.getUser(userCredential.user.uid)
+      
+      if (userData) {
+        setUser(userData)
+        setShowAuth(null)
+      } else {
+        alert('Ошибка загрузки профиля')
+      }
+    } catch (e: any) {
+      console.error('Login error:', e)
+      alert(e.message || 'Неверный email или пароль')
+    }
+  }
+
+  const handleRegister = async (email: string, password: string, name: string) => {
+    try {
+      // Проверяем существующего пользователя
+      const existing = await firestore.getUserByEmail(email)
+      if (existing) {
+        alert('Такой email уже зарегистрирован')
+        return
+      }
+
+      const auth = getAuth()
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+      const uid = userCredential.user.uid
+      
+      await updateProfile(userCredential.user, { displayName: name })
+      
+      const randomId = Math.floor(1000 + Math.random() * 9000).toString()
+      
+      const newUser: User = {
+        id: uniqueId(),
+        email,
+        name,
+        avatar: getRandomAvatar(randomId),
+        bio: '',
+        birthdate: '',
+        isOnline: true,
+        lastSeen: new Date().toISOString(),
+        hideBirthdate: false
+      }
+
+      await firestore.createUser(newUser)
+      setUser(newUser)
       setShowAuth(null)
-    } else {
-      alert('Неверный email или пароль')
+    } catch (e: any) {
+      console.error('Register error:', e)
+      alert(e.message || 'Ошибка регистрации')
     }
   }
 
-  const handleRegister = (email: string, password: string, name: string) => {
-    const users = JSON.parse(localStorage.getItem('zero_users') || '[]')
-    
-    if (users.find((u: User) => u.email === email)) {
-      alert('Такой email уже зарегистрирован')
-      return
-    }
-
-    const randomId = Math.floor(1000 + Math.random() * 9000).toString()
-    
-    const newUser: User = {
-      id: randomId,
-      email,
-      name,
-      password,
-      avatar: getRandomAvatar(randomId),
-      bio: '',
-      birthdate: '',
-      isOnline: true,
-      lastSeen: new Date().toISOString(),
-      hideBirthdate: false
-    }
-
-    users.push(newUser)
-    localStorage.setItem('zero_users', JSON.stringify(users))
-    setUser(newUser)
-    localStorage.setItem('zero_auth', JSON.stringify(newUser))
-    setShowAuth(null)
-  }
-
-  const handleSearch = () => {
+  const handleSearch = async () => {
     if (!searchQuery || searchQuery.length !== 4) return
     
-    const users = JSON.parse(localStorage.getItem('zero_users') || '[]')
-    const found = users.find((u: User) => u.id === searchQuery)
+    if (searchQuery === '0000') {
+      // Избранное - чат с самим собой
+      setSearchResults([{
+        id: 'favorites',
+        email: '',
+        name: 'Избранное',
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=favorites&backgroundColor=random`,
+        bio: '',
+        birthdate: '',
+        isOnline: true,
+        lastSeen: new Date().toISOString(),
+        hideBirthdate: false
+      }])
+      return
+    }
     
-    if (found) {
-      setSearchResults([found])
+    const foundUser = await firestore.getUser(searchQuery)
+    if (foundUser) {
+      setSearchResults([foundUser])
     } else {
       setSearchResults([])
     }
   }
 
   const handleChatSelect = (targetUser: User) => {
-    const messages = JSON.parse(localStorage.getItem('zero_messages') || '[]')
-    const chatMessages = messages.filter((m: Message) => 
-      (m.senderId === user.id && m.recipientId === targetUser.id) ||
-      (m.senderId === targetUser.id && m.recipientId === user.id)
-    )
+    if (messagesUnsubscribe.current) messagesUnsubscribe.current()
     
-    setSelectedChat({
-      id: `${targetUser.id}-${targetUser.name}`,
-      recipient: targetUser,
-      messages: chatMessages
-    })
-    setTab('chats')
+    if (targetUser.id === 'favorites') {
+      const messages: Message[] = []
+      setSelectedChat({
+        id: 'favorites',
+        recipient: targetUser,
+        messages
+      })
+      setTab('chats')
+      // Загружаем сообщения для избранного (отправленные самому себе)
+      messagesUnsubscribe.current = firestore.getMessages(user?.id || '', 'favorites', (msgs) => {
+        setSelectedChat(prev => prev ? { ...prev, messages: msgs } : null)
+      })
+    } else {
+      const messages: Message[] = []
+      setSelectedChat({
+        id: `${targetUser.id}-${targetUser.name}`,
+        recipient: targetUser,
+        messages
+      })
+      setTab('chats')
+      // Подписываемся на сообщения
+      messagesUnsubscribe.current = firestore.getMessages(user?.id || '', targetUser.id, (msgs) => {
+        setSelectedChat(prev => prev ? { ...prev, messages: msgs } : null)
+      })
+    }
   }
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!message.trim() || !selectedChat || !user) return
 
     const newMessage: Message = {
-      id: `${Date.now()}`,
+      id: '',
       senderId: user.id,
       senderName: user.name,
       senderAvatar: user.avatar,
-      recipientId: selectedChat.recipient.id,
+      recipientId: selectedChat.recipient.id === 'favorites' ? 'favorites' : selectedChat.recipient.id,
       content: message,
       timestamp: new Date().toISOString(),
       status: 'sent',
       deletedFor: []
     }
 
-    const messages = JSON.parse(localStorage.getItem('zero_messages') || '[]')
-    messages.push(newMessage)
-    localStorage.setItem('zero_messages', JSON.stringify(messages))
-
-    setMessage('')
-    setSelectedChat({
-      ...selectedChat,
-      messages: [...(selectedChat.messages || []), newMessage]
-    })
+    try {
+      if (selectedChat.recipient.id === 'favorites') {
+        // Для избранного - отправляем сами себе
+        newMessage.recipientId = user.id
+      }
+      
+      await firestore.sendMessage(newMessage)
+      setMessage('')
+    } catch (e) {
+      console.error('Send message error:', e)
+    }
   }
 
-  const handleDeleteMessage = (msg: Message, option: 'me' | 'everyone') => {
-    const messages = JSON.parse(localStorage.getItem('zero_messages') || '[]')
-    const index = messages.findIndex((m: Message) => m.id === msg.id)
-    
-    if (index !== -1) {
+  const handleDeleteMessage = async (msg: Message, option: 'me' | 'everyone') => {
+    try {
       const deletedFor = option === 'me' ? [...msg.deletedFor, user?.id] : []
       
       if (option === 'everyone') {
-        messages[index].content = 'Удалено'
-      } else {
-        messages[index].deletedFor = deletedFor
-      }
-      
-      localStorage.setItem('zero_messages', JSON.stringify(messages))
-      
-      if (selectedChat) {
-        setSelectedChat({
-          ...selectedChat,
-          messages: selectedChat.messages?.map(m => 
-            m.id === msg.id 
-              ? { ...m, deletedFor, content: option === 'everyone' ? 'Удалено' : m.content }
-              : m
-          )
+        await firestore.updateMessage(msg.id, { 
+          deletedFor,
+          content: 'Удалено'
         })
+      } else {
+        await firestore.updateMessage(msg.id, { deletedFor })
       }
+      
+      setDeleteOptions(null)
+      setShowMessageOptions(null)
+    } catch (e) {
+      console.error('Delete message error:', e)
     }
-    
-    setDeleteOptions(null)
-    setShowMessageOptions(null)
+  }
+
+  const handleLogout = async () => {
+    if (messagesUnsubscribe.current) messagesUnsubscribe.current()
+    const auth = getAuth()
+    await signOut(auth)
+    setUser(null)
+    localStorage.removeItem('zero_auth')
   }
 
   if (loading) {
@@ -343,12 +381,16 @@ export default function App() {
               <img src={selectedChat.recipient.avatar} style={{ width: 48, height: 48, borderRadius: '50%' }} />
               <div>
                 <h2 style={{ fontWeight: 'bold' }}>{selectedChat.recipient.name}</h2>
-                <p style={{ fontSize: 14, color: '#666' }}>ID: {selectedChat.recipient.id}</p>
+                {selectedChat.recipient.id === 'favorites' ? (
+                  <p style={{ fontSize: 14, color: '#666' }}>Ваши заметки</p>
+                ) : (
+                  <p style={{ fontSize: 14, color: '#666' }}>ID: {selectedChat.recipient.id}</p>
+                )}
               </div>
             </div>
             
-            {(selectedChat.messages || []).map(m => {
-              if (m.content === 'Удалено' || (m.deletedFor.includes(user.id))) return null
+            {selectedChat.messages && selectedChat.messages.map(m => {
+              if (m.content === 'Удалено' || (m.deletedFor && m.deletedFor.includes(user.id))) return null
               return (
                 <div 
                   key={m.id}
@@ -375,7 +417,7 @@ export default function App() {
             {(!selectedChat.messages || selectedChat.messages.length === 0) && (
               <div style={{ textAlign: 'center', color: '#666', marginTop: 32 }}>
                 <MessageSquare style={{ width: 48, height: 48, margin: '0 auto 16px' }} />
-                <p>Начните диалог</p>
+                <p>{selectedChat.recipient.id === 'favorites' ? 'Начните записывать заметки...' : 'Начните диалог...'}</p>
               </div>
             )}
           </div>
@@ -393,13 +435,27 @@ export default function App() {
                 <img src={u.avatar} style={{ width: 48, height: 48, borderRadius: '50%' }} />
                 <div>
                   <h3 style={{ fontWeight: 'bold' }}>{u.name}</h3>
-                  <p style={{ fontSize: 14, color: '#666' }}>ID: {u.id}</p>
+                  {u.id === 'favorites' ? (
+                    <p style={{ fontSize: 14, color: '#666' }}>Ваши заметки</p>
+                  ) : (
+                    <p style={{ fontSize: 14, color: '#666' }}>ID: {u.id}</p>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         ) : tab === 'chats' ? (
           <div style={{ padding: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 16 }}>
+              <button
+                onClick={() => setSearchQuery('0000')}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: 16, backgroundColor: '#111', borderRadius: 8, border: 'none', cursor: 'pointer', textAlign: 'left', color: '#fff' }}
+              >
+                <Star style={{ width: 20, height: 20 }} />
+                <span>Избранное</span>
+              </button>
+            </div>
+            
             <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
               <input
                 type="text"
@@ -424,7 +480,7 @@ export default function App() {
         ) : tab === 'profile' ? (
           <ProfilePage user={user} setUser={setUser} />
         ) : (
-          <SettingsPage user={user} setUser={setUser} />
+          <SettingsPage user={user} setUser={setUser} onLogout={handleLogout} />
         )}
       </main>
 
@@ -433,7 +489,7 @@ export default function App() {
           <div style={{ display: 'flex', gap: 8 }}>
             <input
               type="text"
-              placeholder="Сообщение..."
+              placeholder={`${selectedChat.recipient.id === 'favorites' ? 'Напишите заметку...' : 'Сообщение...'}`}
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
@@ -527,16 +583,15 @@ function ProfilePage({ user, setUser }: { user: User, setUser: (u: User) => void
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState(user)
 
-  const handleSave = () => {
-    setUser(formData)
-    setEditing(false)
-    localStorage.setItem('zero_auth', JSON.stringify(formData))
-    
-    const users = JSON.parse(localStorage.getItem('zero_users') || '[]')
-    const index = users.findIndex((u: User) => u.id === user.id)
-    if (index !== -1) {
-      users[index] = formData
-      localStorage.setItem('zero_users', JSON.stringify(users))
+  const handleSave = async () => {
+    try {
+      await firestore.updateUser(formData)
+      setUser(formData)
+      setEditing(false)
+      alert('Сохранено!')
+    } catch (e) {
+      console.error('Save error:', e)
+      alert('Ошибка сохранения')
     }
   }
 
@@ -625,17 +680,14 @@ function ProfilePage({ user, setUser }: { user: User, setUser: (u: User) => void
   )
 }
 
-function SettingsPage({ user, setUser }: { user: User, setUser: (u: User) => void }) {
-  const handleToggle = (key: keyof User) => {
+function SettingsPage({ user, setUser, onLogout }: { user: User, setUser: (u: User) => void, onLogout: () => void }) {
+  const handleToggle = async (key: keyof User) => {
     const updated = { ...user, [key]: !user[key] }
-    setUser(updated)
-    localStorage.setItem('zero_auth', JSON.stringify(updated))
-    
-    const users = JSON.parse(localStorage.getItem('zero_users') || '[]')
-    const index = users.findIndex((u: User) => u.id === user.id)
-    if (index !== -1) {
-      users[index] = updated
-      localStorage.setItem('zero_users', JSON.stringify(users))
+    try {
+      await firestore.updateUser(updated)
+      setUser(updated)
+    } catch (e) {
+      console.error('Update settings error:', e)
     }
   }
 
@@ -655,14 +707,11 @@ function SettingsPage({ user, setUser }: { user: User, setUser: (u: User) => voi
       </div>
 
       <button
-        onClick={() => {
-          localStorage.removeItem('zero_auth')
-          setUser(null as any)
-        }}
+        onClick={onLogout}
         style={{ width: '100%', padding: 16, backgroundColor: '#cc0000', color: '#fff', fontWeight: 'bold', borderRadius: 8, border: 'none', cursor: 'pointer' }}
       >
         Выйти из аккаунта
       </button>
     </div>
   )
-  }
+}
