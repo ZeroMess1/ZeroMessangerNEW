@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { MessageSquare, User as UserIcon, Settings, Send, Search, Star } from 'lucide-react'
 import { firestore } from './firebase'
-import { onAuthStateChanged, signOut } from 'firebase/auth'
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged, signOut } from 'firebase/auth'
 
 type User = {
   id: string
+  searchId: string
   email: string
   name: string
   avatar: string
@@ -50,39 +50,71 @@ export default function App() {
   const [deleteOptions, setDeleteOptions] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const messagesUnsubscribe = useRef<(() => void) | null>(null)
+  const authUnsubscribe = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     initApp()
     return () => {
       if (messagesUnsubscribe.current) messagesUnsubscribe.current()
+      if (authUnsubscribe.current) authUnsubscribe.current()
     }
   }, [])
 
   const initApp = () => {
-    setLoading(false)
+    const auth = getAuth()
+    
+    authUnsubscribe.current = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // Получаем данные пользователя из Firestore
+        const userData = await firestore.getUser(firebaseUser.uid)
+        if (userData) {
+          setUser(userData)
+        } else {
+          // Если пользователя нет в Firestore, создаем
+          const searchId = Math.floor(1000 + Math.random() * 9000).toString()
+          const newUser: User = {
+            id: firebaseUser.uid,
+            searchId,
+            email: firebaseUser.email || '',
+            name: firebaseUser.displayName || 'Пользователь',
+            avatar: getRandomAvatar(firebaseUser.uid),
+            bio: '',
+            birthdate: '',
+            isOnline: true,
+            lastSeen: new Date().toISOString(),
+            hideBirthdate: false
+          }
+          await firestore.createUser(firebaseUser.uid, newUser)
+          setUser(newUser)
+        }
+      } else {
+        setUser(null)
+      }
+      setLoading(false)
+    })
   }
 
   const handleLogin = async (email: string, password: string) => {
     try {
       const auth = getAuth()
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      
+      // Получаем данные пользователя из Firestore
       const userData = await firestore.getUser(userCredential.user.uid)
       
       if (userData) {
         setUser(userData)
         setShowAuth(null)
-      } else {
-        alert('Ошибка загрузки профиля')
       }
     } catch (e: any) {
       console.error('Login error:', e)
-      alert(e.message || 'Неверный email или пароль')
+      alert('Неверный email или пароль')
     }
   }
 
   const handleRegister = async (email: string, password: string, name: string) => {
     try {
-      // Проверяем существующего пользователя
+      // Проверяем существующего пользователя по email
       const existing = await firestore.getUserByEmail(email)
       if (existing) {
         alert('Такой email уже зарегистрирован')
@@ -92,16 +124,16 @@ export default function App() {
       const auth = getAuth()
       const userCredential = await createUserWithEmailAndPassword(auth, email, password)
       const uid = userCredential.user.uid
+      const searchId = Math.floor(1000 + Math.random() * 9000).toString()
       
       await updateProfile(userCredential.user, { displayName: name })
       
-      const randomId = Math.floor(1000 + Math.random() * 9000).toString()
-      
       const newUser: User = {
-        id: uniqueId(),
+        id: uid,
+        searchId,
         email,
         name,
-        avatar: getRandomAvatar(randomId),
+        avatar: getRandomAvatar(uid),
         bio: '',
         birthdate: '',
         isOnline: true,
@@ -109,7 +141,10 @@ export default function App() {
         hideBirthdate: false
       }
 
-      await firestore.createUser(newUser)
+      // Сохраняем в Firestore
+      await firestore.createUser(uid, newUser)
+      
+      // Сразу устанавливаем пользователя (моментальный вход)
       setUser(newUser)
       setShowAuth(null)
     } catch (e: any) {
@@ -125,6 +160,7 @@ export default function App() {
       // Избранное - чат с самим собой
       setSearchResults([{
         id: 'favorites',
+        searchId: 'favorites',
         email: '',
         name: 'Избранное',
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=favorites&backgroundColor=random`,
@@ -137,7 +173,7 @@ export default function App() {
       return
     }
     
-    const foundUser = await firestore.getUser(searchQuery)
+    const foundUser = await firestore.getUserBySearchId(searchQuery)
     if (foundUser) {
       setSearchResults([foundUser])
     } else {
@@ -225,10 +261,10 @@ export default function App() {
 
   const handleLogout = async () => {
     if (messagesUnsubscribe.current) messagesUnsubscribe.current()
+    if (authUnsubscribe.current) authUnsubscribe.current()
     const auth = getAuth()
     await signOut(auth)
     setUser(null)
-    localStorage.removeItem('zero_auth')
   }
 
   if (loading) {
@@ -261,7 +297,7 @@ export default function App() {
                   if (e.key === 'Enter') {
                     const email = (e.target as HTMLInputElement).value
                     const password = (document.querySelector('input[type="password"]') as HTMLInputElement).value
-                    handleLogin(email, password)
+                    if (email && password) handleLogin(email, password)
                   }
                 }}
                 style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16, padding: 16 }}
@@ -269,6 +305,13 @@ export default function App() {
               <input
                 type="password"
                 placeholder="Пароль"
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    const email = (document.querySelector('input[type="email"]') as HTMLInputElement).value
+                    const password = (e.target as HTMLInputElement).value
+                    if (email && password) handleLogin(email, password)
+                  }
+                }}
                 style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16, padding: 16 }}
               />
               <button
@@ -303,7 +346,7 @@ export default function App() {
               />
               <input
                 type="password"
-                placeholder="Пароль"
+                placeholder="Пароль (минимум 6 символов)"
                 style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16, padding: 16 }}
               />
               <button
@@ -312,6 +355,14 @@ export default function App() {
                   const name = inputs[0].value
                   const email = inputs[1].value
                   const password = inputs[2].value
+                  if (!name || !email || !password) {
+                    alert('Заполните все поля')
+                    return
+                  }
+                  if (password.length < 6) {
+                    alert('Пароль должен быть минимум 6 символов')
+                    return
+                  }
                   handleRegister(email, password, name)
                 }}
                 style={{ width: '100%', backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', fontSize: 16, padding: 16, cursor: 'pointer' }}
@@ -384,7 +435,7 @@ export default function App() {
                 {selectedChat.recipient.id === 'favorites' ? (
                   <p style={{ fontSize: 14, color: '#666' }}>Ваши заметки</p>
                 ) : (
-                  <p style={{ fontSize: 14, color: '#666' }}>ID: {selectedChat.recipient.id}</p>
+                  <p style={{ fontSize: 14, color: '#666' }}>ID: {selectedChat.recipient.searchId}</p>
                 )}
               </div>
             </div>
@@ -438,7 +489,7 @@ export default function App() {
                   {u.id === 'favorites' ? (
                     <p style={{ fontSize: 14, color: '#666' }}>Ваши заметки</p>
                   ) : (
-                    <p style={{ fontSize: 14, color: '#666' }}>ID: {u.id}</p>
+                    <p style={{ fontSize: 14, color: '#666' }}>ID: {u.searchId}</p>
                   )}
                 </div>
               </div>
@@ -585,7 +636,7 @@ function ProfilePage({ user, setUser }: { user: User, setUser: (u: User) => void
 
   const handleSave = async () => {
     try {
-      await firestore.updateUser(formData)
+      await firestore.updateUser(user.id, formData)
       setUser(formData)
       setEditing(false)
       alert('Сохранено!')
@@ -602,7 +653,7 @@ function ProfilePage({ user, setUser }: { user: User, setUser: (u: User) => void
           <img src={user.avatar} style={{ width: 80, height: 80, borderRadius: '50%' }} />
           <div>
             <h2 style={{ fontSize: 24, fontWeight: 'bold' }}>{user.name}</h2>
-            <p style={{ color: '#666' }}>ID: {user.id}</p>
+            <p style={{ color: '#666' }}>ID: {user.searchId}</p>
           </div>
         </div>
 
@@ -652,7 +703,7 @@ function ProfilePage({ user, setUser }: { user: User, setUser: (u: User) => void
         <img src={user.avatar} style={{ width: 80, height: 80, borderRadius: '50%' }} />
         <div>
           <h2 style={{ fontSize: 24, fontWeight: 'bold' }}>{user.name}</h2>
-          <p style={{ color: '#666' }}>ID: {user.id}</p>
+          <p style={{ color: '#666' }}>ID: {user.searchId}</p>
         </div>
       </div>
 
@@ -684,7 +735,7 @@ function SettingsPage({ user, setUser, onLogout }: { user: User, setUser: (u: Us
   const handleToggle = async (key: keyof User) => {
     const updated = { ...user, [key]: !user[key] }
     try {
-      await firestore.updateUser(updated)
+      await firestore.updateUser(user.id, updated)
       setUser(updated)
     } catch (e) {
       console.error('Update settings error:', e)
