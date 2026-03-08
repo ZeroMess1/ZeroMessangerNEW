@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
-import { MessageSquare, User as UserIcon, Settings, Send, Search, MoreVertical, FileText, Sparkles } from 'lucide-react'
+import { MessageSquare, User as UserIcon, Settings, Send, Search } from 'lucide-react'
 import type { User, Message, Chat } from './types'
 import { supabase } from './lib/supabase'
 import { getRandomAvatar } from './lib/images'
-import { cn } from './lib/utils'
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -17,7 +16,6 @@ export default function App() {
   const [deleteOptions, setDeleteOptions] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  // Инициализация
   useEffect(() => {
     initApp()
   }, [])
@@ -61,7 +59,6 @@ export default function App() {
 
   const handleRegister = async (email: string, password: string, name: string) => {
     try {
-      // Проверяем существующего пользователя
       const { data: existing } = await supabase
         .from('users')
         .select('id')
@@ -198,10 +195,10 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <div className="text-center">
-          <MessageSquare className="w-16 h-16 mx-auto mb-4 animate-pulse" />
-          <p className="text-xl">Загрузка...</p>
+      <div style={{ minHeight: '100vh', backgroundColor: '#000', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center' }}>
+          <MessageSquare style={{ width: 64, height: 64, margin: '0 auto 16px' }} />
+          <p style={{ fontSize: 20 }}>Загрузка...</p>
         </div>
       </div>
     )
@@ -209,20 +206,20 @@ export default function App() {
 
   if (showAuth) {
     return (
-      <div className="min-h-screen bg-black text-white p-4 flex items-center justify-center">
-        <div className="w-full max-w-sm space-y-6">
-          <div className="text-center">
-            <MessageSquare className="w-20 h-20 mx-auto mb-4" />
-            <h1 className="text-3xl font-bold">Zero Messenger</h1>
+      <div style={{ minHeight: '100vh', backgroundColor: '#000', color: '#fff', padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: '100%', maxWidth: 400 }}>
+          <div style={{ textAlign: 'center', marginBottom: 24 }}>
+            <MessageSquare style={{ width: 80, height: 80, margin: '0 auto 16px' }} />
+            <h1 style={{ fontSize: 32, fontWeight: 'bold' }}>Zero Messenger</h1>
           </div>
           
           {showAuth === 'login' ? (
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold text-center">Вход</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 'bold', textAlign: 'center' }}>Вход</h2>
               <input
                 type="email"
                 placeholder="Email"
-                className="w-full p-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500"
+                style={{ width: '100%', padding: 12, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', padding: '16px', fontSize: 16 }}
                 onKeyPress={(e) => {
                   if (e.key === 'Enter') {
                     const target = e.target as HTMLInputElement
@@ -234,7 +231,7 @@ export default function App() {
               <input
                 type="password"
                 placeholder="Пароль"
-                className="w-full p-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500"
+                style={{ width: '100%', padding: 12, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', padding: '16px', fontSize: 16 }}
               />
               <button
                 onClick={() => {
@@ -242,49 +239,50 @@ export default function App() {
                   const password = (document.querySelector('input[type="password"]') as HTMLInputElement).value
                   handleLogin(email, password)
                 }}
-                className="w-full p-3 bg-white text-black font-bold rounded-lg hover:bg-gray-200 transition-colors"
+                style={{ width: '100%', padding: 12, backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', padding: '16px', fontSize: 16, cursor: 'pointer' }}
               >
                 Войти
               </button>
-              <p className="text-center text-gray-400">
+              <p style={{ textAlign: 'center', color: '#666' }}>
                 Нет аккаунта?{' '}
-                <button onClick={() => setShowAuth('register')} className="text-white underline">
+                <button onClick={() => setShowAuth('register')} style={{ color: '#fff', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}>
                   Зарегистрироваться
                 </button>
               </p>
             </div>
           ) : (
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold text-center">Регистрация</h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 'bold', textAlign: 'center' }}>Регистрация</h2>
               <input
                 type="text"
                 placeholder="Имя"
-                className="w-full p-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500"
+                style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', padding: '16px', fontSize: 16 }}
               />
               <input
                 type="email"
                 placeholder="Email"
-                className="w-full p-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500"
+                style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', padding: '16px', fontSize: 16 }}
               />
               <input
                 type="password"
                 placeholder="Пароль"
-                className="w-full p-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500"
+                style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', padding: '16px', fontSize: 16 }}
               />
               <button
                 onClick={() => {
-                  const name = (document.querySelector('input[type="text"]') as HTMLInputElement).value
-                  const email = (document.querySelectorAll('input[type="email"]')[1] as HTMLInputElement).value
-                  const password = (document.querySelectorAll('input[type="password"]')[1] as HTMLInputElement).value
+                  const inputs = document.querySelectorAll('input')
+                  const name = inputs[0].value
+                  const email = inputs[1].value
+                  const password = inputs[2].value
                   handleRegister(email, password, name)
                 }}
-                className="w-full p-3 bg-white text-black font-bold rounded-lg hover:bg-gray-200 transition-colors"
+                style={{ width: '100%', padding: 12, backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', padding: '16px', fontSize: 16, cursor: 'pointer' }}
               >
                 Зарегистрироваться
               </button>
-              <p className="text-center text-gray-400">
+              <p style={{ textAlign: 'center', color: '#666' }}>
                 Есть аккаунт?{' '}
-                <button onClick={() => setShowAuth('login')} className="text-white underline">
+                <button onClick={() => setShowAuth('login')} style={{ color: '#fff', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}>
                   Войти
                 </button>
               </p>
@@ -297,22 +295,22 @@ export default function App() {
 
   if (!user && !loading) {
     return (
-      <div className="min-h-screen bg-black text-white p-4 flex items-center justify-center">
-        <div className="w-full max-w-sm space-y-6">
-          <div className="text-center">
-            <MessageSquare className="w-20 h-20 mx-auto mb-4" />
-            <h1 className="text-3xl font-bold">Zero Messenger</h1>
-            <p className="text-gray-400 mt-2">Мессенджер в черно-белом стиле</p>
+      <div style={{ minHeight: '100vh', backgroundColor: '#000', color: '#fff', padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ width: '100%', maxWidth: 400, display: 'flex', flexDirection: 'column', gap: 24 }}>
+          <div style={{ textAlign: 'center' }}>
+            <MessageSquare style={{ width: 80, height: 80, margin: '0 auto 16px' }} />
+            <h1 style={{ fontSize: 32, fontWeight: 'bold' }}>Zero Messenger</h1>
+            <p style={{ color: '#666', marginTop: 8 }}>Мессенджер в черно-белом стиле</p>
           </div>
           <button
             onClick={() => setShowAuth('login')}
-            className="w-full p-3 bg-white text-black font-bold rounded-lg hover:bg-gray-200 transition-colors"
+            style={{ width: '100%', padding: 12, backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', padding: '16px', fontSize: 16, cursor: 'pointer' }}
           >
             Вход
           </button>
           <button
             onClick={() => setShowAuth('register')}
-            className="w-full p-3 border border-white text-white font-bold rounded-lg hover:bg-gray-900 transition-colors"
+            style={{ width: '100%', padding: 12, backgroundColor: 'transparent', color: '#fff', fontWeight: 'bold', borderRadius: 8, border: '1px solid #fff', padding: '16px', fontSize: 16, cursor: 'pointer' }}
           >
             Регистрация
           </button>
@@ -322,211 +320,205 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col">
-      {/* Header */}
-      <header className="p-4 border-b border-gray-800">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">Zero Messenger</h1>
+    <div style={{ minHeight: '100vh', backgroundColor: '#000', color: '#fff', display: 'flex', flexDirection: 'column' }}>
+      <header style={{ padding: 16, borderBottom: '1px solid #222' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h1 style={{ fontSize: 20, fontWeight: 'bold' }}>Zero Messenger</h1>
           {selectedChat ? (
-            <button
-              onClick={() => setSelectedChat(null)}
-              className="text-gray-400 hover:text-white"
-            >
-              Назад
+            <button onClick={() => setSelectedChat(null)} style={{ color: '#666', background: 'none', border: 'none', cursor: 'pointer' }}>
+              ← Назад
             </button>
           ) : tab === 'chats' && (
             <button onClick={() => setSearchResults([])}>
-              <MessageSquare className="w-6 h-6" />
+              <MessageSquare style={{ width: 24, height: 24 }} />
             </button>
           )}
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto pb-20">
+      <main style={{ flex: 1, overflowY: 'auto', paddingBottom: 80 }}>
         {selectedChat ? (
-          <div className="p-4">
-            <div className="flex items-center space-x-3 pb-4 border-b border-gray-800">
-              <img src={selectedChat.recipient.avatar} className="w-12 h-12 rounded-full" />
+          <div style={{ padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 16, borderBottom: '1px solid #222' }}>
+              <img src={selectedChat.recipient.avatar} style={{ width: 48, height: 48, borderRadius: '50%' }} />
               <div>
-                <h2 className="font-bold">{selectedChat.recipient.name}</h2>
-                <p className="text-sm text-gray-400">ID: {selectedChat.recipient.id}</p>
+                <h2 style={{ fontWeight: 'bold' }}>{selectedChat.recipient.name}</h2>
+                <p style={{ fontSize: 14, color: '#666' }}>ID: {selectedChat.recipient.id}</p>
               </div>
             </div>
             
-            {selectedChat.messages && selectedChat.messages.map(m => m.content !== 'Удалено' && (
-              !m.deletedFor.includes(user.id) && (
+            {(selectedChat.messages || []).map(m => {
+              if (m.content === 'Удалено' || m.deletedFor.includes(user.id)) return null
+              return (
                 <div 
                   key={m.id}
-                  className={cn(
-                    "mt-4 p-3 max-w-[80%] rounded-lg",
-                    m.senderId === user.id 
-                      ? "ml-auto bg-gray-800" 
-                      : "mr-auto bg-gray-700"
-                  )}
-                  onClick={() => {
-                    if (m.senderId === user.id) setShowMessageOptions(m.id)
+                  style={{
+                    marginTop: 16,
+                    padding: 12,
+                    maxWidth: '80%',
+                    borderRadius: 8,
+                    backgroundColor: m.senderId === user.id ? '#111' : '#222',
+                    marginLeft: m.senderId === user.id ? 'auto' : 0,
+                    cursor: m.senderId === user.id ? 'pointer' : 'default'
                   }}
+                  onClick={() => m.senderId === user.id && setShowMessageOptions(m.id)}
                 >
                   <p>{m.content}</p>
-                  <div className="flex items-center mt-1 text-xs text-gray-400">
+                  <div style={{ display: 'flex', alignItems: 'center', marginTop: 4, fontSize: 12, color: '#666' }}>
                     {new Date(m.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
-                    {m.senderId === user.id && (
-                      <span className="ml-2">
-                        {m.status === 'read' ? '✓✓' : m.status === 'delivered' ? '✓' : '✗'}
-                      </span>
-                    )}
+                    {m.senderId === user.id && <span style={{ marginLeft: 8 }}>{m.status === 'read' ? '✓✓' : '✓'}</span>}
                   </div>
-                  {showMessageOptions === m.id && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                      <div className="bg-black border border-gray-700 rounded-lg p-4 w-full max-w-sm space-y-2">
-                        <button
-                          onClick={() => setDeleteOptions(m.id)}
-                          className="w-full p-3 text-red-500 text-left hover:bg-gray-900 rounded-lg"
-                        >
-                          Удалить сообщение
-                        </button>
-                        <button
-                          onClick={() => setShowMessageOptions(null)}
-                          className="w-full p-3 text-left hover:bg-gray-900 rounded-lg"
-                        >
-                          Отмена
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                  {deleteOptions === m.id && (
-                    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                      <div className="bg-black border border-gray-700 rounded-lg p-4 w-full max-w-sm space-y-2">
-                        <button
-                          onClick={() => handleDeleteMessage(m, 'me')}
-                          className="w-full p-3 text-left hover:bg-gray-900 rounded-lg"
-                        >
-                          Удалить у меня
-                        </button>
-                        <button
-                          onClick={() => handleDeleteMessage(m, 'everyone')}
-                          className="w-full p-3 text-left hover:bg-gray-900 rounded-lg"
-                        >
-                          Удалить у всех
-                        </button>
-                        <button
-                          onClick={() => setDeleteOptions(null)}
-                          className="w-full p-3 text-gray-400 text-left hover:bg-gray-900 rounded-lg"
-                        >
-                          Отмена
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )
-            ))}
+            })}
             
-            {selectedChat.messages === null && (
-              <div className="text-center text-gray-400 mt-8">
-                <MessageSquare className="w-12 h-12 mx-auto mb-4" />
+            {false && (
+              <div style={{ textAlign: 'center', color: '#666', marginTop: 32 }}>
+                <MessageSquare style={{ width: 48, height: 48, margin: '0 auto 16px' }} />
                 <p>Начните диалог</p>
               </div>
             )}
           </div>
         ) : tab === 'chats' && searchResults.length > 0 ? (
-          <div className="p-4 space-y-4">
-            <button onClick={() => setSearchResults([])} className="text-gray-400">
+          <div style={{ padding: 16 }}>
+            <button onClick={() => setSearchResults([])} style={{ color: '#666', background: 'none', border: 'none', cursor: 'pointer' }}>
               ← Вернуться к чатам
             </button>
             {searchResults.map(u => (
               <div
                 key={u.id}
                 onClick={() => handleChatSelect(u)}
-                className="flex items-center space-x-3 p-3 bg-gray-900 rounded-lg hover:bg-gray-800 cursor-pointer"
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 12, backgroundColor: '#111', borderRadius: 8, marginTop: 8, cursor: 'pointer' }}
               >
-                <img src={u.avatar} className="w-12 h-12 rounded-full" />
+                <img src={u.avatar} style={{ width: 48, height: 48, borderRadius: '50%' }} />
                 <div>
-                  <h3 className="font-bold">{u.name}</h3>
-                  <p className="text-sm text-gray-400">ID: {u.id}</p>
+                  <h3 style={{ fontWeight: 'bold' }}>{u.name}</h3>
+                  <p style={{ fontSize: 14, color: '#666' }}>ID: {u.id}</p>
                 </div>
               </div>
             ))}
           </div>
-        ) : (
-          tab === 'chats' ? (
-            <div className="p-4">
-              <div className="flex space-x-2 mb-4">
-                <input
-                  type="text"
-                  placeholder="Поиск по ID (4 цифры)"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                  className="flex-1 p-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500"
-                />
-                <button
-                  onClick={handleSearch}
-                  className="p-3 bg-white text-black rounded-lg hover:bg-gray-200"
-                >
-                  <Search className="w-5 h-5" />
-                </button>
-              </div>
-              
-              <div className="text-center text-gray-400 mt-8 space-y-4">
-                <Search className="w-16 h-16 mx-auto" />
-                <p>
-                  Найдите человека по ID из 4 цифр<br/>
-                  чтобы начать общение
-                </p>
-              </div>
+        ) : tab === 'chats' ? (
+          <div style={{ padding: 16 }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              <input
+                type="text"
+                placeholder="Поиск по ID (4 цифры)"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                style={{ flex: 1, padding: 12, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16 }}
+              />
+              <button
+                onClick={handleSearch}
+                style={{ padding: 12, backgroundColor: '#fff', color: '#000', borderRadius: 8, border: 'none', cursor: 'pointer' }}
+              >
+                <Search style={{ width: 20, height: 20 }} />
+              </button>
             </div>
-          ) : tab === 'profile' ? (
-            <ProfilePage user={user} setUser={setUser} />
-          ) : (
-            <SettingsPage user={user} setUser={setUser} />
-          )
+            
+            <div style={{ textAlign: 'center', color: '#666', marginTop: 32 }}>
+              <Search style={{ width: 64, height: 64, margin: '0 auto 16px' }} />
+              <p>Найдите человека по ID из 4 цифр<br/>чтобы начать общение</p>
+            </div>
+          </div>
+        ) : tab === 'profile' ? (
+          <ProfilePage user={user} setUser={setUser} />
+        ) : (
+          <SettingsPage user={user} setUser={setUser} />
         )}
       </main>
 
-      {/* Message Input */}
       {selectedChat && (
-        <div className="fixed bottom-20 left-0 right-0 p-4 bg-black border-t border-gray-800">
-          <div className="flex space-x-2">
+        <div style={{ position: 'fixed', bottom: 80, left: 0, right: 0, padding: 16, backgroundColor: '#000', borderTop: '1px solid #222' }}>
+          <div style={{ display: 'flex', gap: 8 }}>
             <input
               type="text"
               placeholder="Сообщение..."
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-              className="flex-1 p-3 bg-gray-900 border border-gray-700 rounded-lg text-white placeholder-gray-500"
+              style={{ flex: 1, padding: 12, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16 }}
             />
             <button
               onClick={handleSendMessage}
-              className="p-3 bg-white text-black rounded-lg hover:bg-gray-200"
+              style={{ padding: 12, backgroundColor: '#fff', color: '#000', borderRadius: 8, border: 'none', cursor: 'pointer' }}
             >
-              <Send className="w-5 h-5" />
+              <Send style={{ width: 20, height: 20 }} />
             </button>
           </div>
         </div>
       )}
 
-      {/* Bottom Nav */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-black border-t border-gray-800 flex justify-around p-2">
+      <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, backgroundColor: '#000', borderTop: '1px solid #222', display: 'flex', justifyContent: 'space-around', padding: 8 }}>
         <button
           onClick={() => setTab('chats')}
-          className={cn("p-2", tab === 'chats' ? "text-white" : "text-gray-500")}
+          style={{ padding: 8, background: 'none', border: 'none', cursor: 'pointer', color: tab === 'chats' ? '#fff' : '#444' }}
         >
-          <MessageSquare className="w-6 h-6 mx-auto" />
+          <MessageSquare style={{ width: 24, height: 24 }} />
         </button>
         <button
           onClick={() => setTab('settings')}
-          className={cn("p-2", tab === 'settings' ? "text-white" : "text-gray-500")}
+          style={{ padding: 8, background: 'none', border: 'none', cursor: 'pointer', color: tab === 'settings' ? '#fff' : '#444' }}
         >
-          <Settings className="w-6 h-6 mx-auto" />
+          <Settings style={{ width: 24, height: 24 }} />
         </button>
         <button
           onClick={() => setTab('profile')}
-          className={cn("p-2", tab === 'profile' ? "text-white" : "text-gray-500")}
+          style={{ padding: 8, background: 'none', border: 'none', cursor: 'pointer', color: tab === 'profile' ? '#fff' : '#444' }}
         >
-          <UserIcon className="w-6 h-6 mx-auto" />
+          <UserIcon style={{ width: 24, height: 24 }} />
         </button>
       </nav>
+
+      {showMessageOptions && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
+          <div style={{ backgroundColor: '#000', border: '1px solid #333', borderRadius: 8, padding: 16, width: '100%', maxWidth: 320 }}>
+            <button
+              onClick={() => setDeleteOptions(showMessageOptions)}
+              style={{ width: '100%', padding: 12, color: '#ff4444', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 4 }}
+            >
+              Удалить сообщение
+            </button>
+            <button
+              onClick={() => setShowMessageOptions(null)}
+              style={{ width: '100%', padding: 12, textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 4 }}
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
+
+      {deleteOptions && (
+        <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
+          <div style={{ backgroundColor: '#000', border: '1px solid #333', borderRadius: 8, padding: 16, width: '100%', maxWidth: 320 }}>
+            <button
+              onClick={() => {
+                const msg = selectedChat?.messages?.find(m => m.id === deleteOptions)
+                if (msg) handleDeleteMessage(msg, 'me')
+              }}
+              style={{ width: '100%', padding: 12, textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 4 }}
+            >
+              Удалить у меня
+            </button>
+            <button
+              onClick={() => {
+                const msg = selectedChat?.messages?.find(m => m.id === deleteOptions)
+                if (msg) handleDeleteMessage(msg, 'everyone')
+              }}
+              style={{ width: '100%', padding: 12, textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 4 }}
+            >
+              Удалить у всех
+            </button>
+            <button
+              onClick={() => setDeleteOptions(null)}
+              style={{ width: '100%', padding: 12, color: '#666', textAlign: 'left', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 4 }}
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -553,81 +545,87 @@ function ProfilePage({ user, setUser }: { user: User, setUser: (u: User) => void
     }
   }
 
-  return (
-    <div className="p-4 space-y-6">
-      <div className="flex items-center space-x-4">
-        <img src={user.avatar} className="w-20 h-20 rounded-full" />
-        <div>
-          <h2 className="text-2xl font-bold">{user.name}</h2>
-          <p className="text-gray-400">ID: {user.id}</p>
-        </div>
-      </div>
-
-      {editing ? (
-        <div className="space-y-4">
+  if (editing) {
+    return (
+      <div style={{ padding: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+          <img src={user.avatar} style={{ width: 80, height: 80, borderRadius: '50%' }} />
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Имя</label>
+            <h2 style={{ fontSize: 24, fontWeight: 'bold' }}>{user.name}</h2>
+            <p style={{ color: '#666' }}>ID: {user.id}</p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <label style={{ display: 'block', fontSize: 14, color: '#666', marginBottom: 4 }}>Имя</label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              className="w-full p-3 bg-gray-900 border border-gray-700 rounded-lg text-white"
+              style={{ width: '100%', padding: 12, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16 }}
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Обо мне</label>
+            <label style={{ display: 'block', fontSize: 14, color: '#666', marginBottom: 4 }}>Обо мне</label>
             <textarea
               value={formData.bio}
               onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-              className="w-full p-3 bg-gray-900 border border-gray-700 rounded-lg text-white h-24"
+              style={{ width: '100%', padding: 12, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', height: 80, resize: 'vertical' }}
             />
           </div>
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Дата рождения</label>
+            <label style={{ display: 'block', fontSize: 14, color: '#666', marginBottom: 4 }}>Дата рождения</label>
             <input
               type="date"
               value={formData.birthdate}
               onChange={(e) => setFormData({ ...formData, birthdate: e.target.value })}
-              className="w-full p-3 bg-gray-900 border border-gray-700 rounded-lg text-white"
+              style={{ width: '100%', padding: 12, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16 }}
             />
           </div>
-          <div className="flex space-x-2">
-            <button
-              onClick={handleSave}
-              className="flex-1 p-3 bg-white text-black font-bold rounded-lg"
-            >
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={handleSave} style={{ flex: 1, padding: 12, backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', cursor: 'pointer' }}>
               Сохранить
             </button>
-            <button
-              onClick={() => setEditing(false)}
-              className="flex-1 p-3 border border-gray-700 rounded-lg"
-            >
+            <button onClick={() => setEditing(false)} style={{ flex: 1, padding: 12, backgroundColor: '#333', color: '#fff', borderRadius: 8, border: 'none', cursor: 'pointer' }}>
               Отмена
             </button>
           </div>
         </div>
-      ) : (
-        <div className="space-y-4">
-          <div>
-            <p className="text-sm text-gray-400">Обо мне</p>
-            <p>{user.bio || 'Не указано'}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-400">Дата рождения</p>
-            <p>{user.birthdate || 'Не указана'}</p>
-          </div>
-          <div>
-            <p className="text-sm text-gray-400">Email</p>
-            <p>{user.email}</p>
-          </div>
-          <button
-            onClick={() => setEditing(true)}
-            className="w-full p-3 bg-white text-black font-bold rounded-lg"
-          >
-            Редактировать
-          </button>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+        <img src={user.avatar} style={{ width: 80, height: 80, borderRadius: '50%' }} />
+        <div>
+          <h2 style={{ fontSize: 24, fontWeight: 'bold' }}>{user.name}</h2>
+          <p style={{ color: '#666' }}>ID: {user.id}</p>
         </div>
-      )}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div>
+          <p style={{ fontSize: 14, color: '#666' }}>Обо мне</p>
+          <p>{user.bio || 'Не указано'}</p>
+        </div>
+        <div>
+          <p style={{ fontSize: 14, color: '#666' }}>Дата рождения</p>
+          <p>{user.birthdate || 'Не указана'}</p>
+        </div>
+        <div>
+          <p style={{ fontSize: 14, color: '#666' }}>Email</p>
+          <p>{user.email}</p>
+        </div>
+        <button
+          onClick={() => setEditing(true)}
+          style={{ width: '100%', padding: 12, backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', cursor: 'pointer' }}
+        >
+          Редактировать
+        </button>
+      </div>
     </div>
   )
 }
@@ -651,27 +649,17 @@ function SettingsPage({ user, setUser }: { user: User, setUser: (u: User) => voi
   }
 
   return (
-    <div className="p-4 space-y-4">
-      <div className="flex items-center justify-between p-4 bg-gray-900 rounded-lg">
+    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, backgroundColor: '#111', borderRadius: 8 }}>
         <div>
-          <p className="font-bold">Скрыть дату рождения</p>
-          <p className="text-sm text-gray-400">Ваш возраст будет скрыт от других</p>
+          <p style={{ fontWeight: 'bold' }}>Скрыть дату рождения</p>
+          <p style={{ fontSize: 14, color: '#666' }}>Ваш возраст будет скрыт от других</p>
         </div>
         <button
           onClick={() => handleToggle('hideBirthdate')}
-          className={cn("w-12 h-6 rounded-full", user.hideBirthdate ? "bg-white" : "bg-gray-700")}
+          style={{ width: 48, height: 24, borderRadius: 12, backgroundColor: user.hideBirthdate ? '#fff' : '#333', border: 'none', cursor: 'pointer', position: 'relative' }}
         >
-          <div className={cn("w-5 h-5 rounded-full bg-black mt-0.5 transition-all", user.hideBirthdate ? "ml-6" : "ml-1")} />
-        </button>
-      </div>
-
-      <div className="flex items-center justify-between p-4 bg-gray-900 rounded-lg">
-        <div>
-          <p className="font-bold">Уведомления</p>
-          <p className="text-sm text-gray-400">Уведомлять о новых сообщениях</p>
-        </div>
-        <button className="w-12 h-6 rounded-full bg-white">
-          <div className="w-5 h-5 rounded-full bg-black mt-0.5 ml-6" />
+          <div style={{ width: 20, height: 20, borderRadius: '50%', backgroundColor: '#000', position: 'absolute', top: 2, transition: 'all 0.2s', left: user.hideBirthdate ? 26 : 2 }} />
         </button>
       </div>
 
@@ -680,10 +668,10 @@ function SettingsPage({ user, setUser }: { user: User, setUser: (u: User) => voi
           localStorage.removeItem('zero_auth')
           setUser(null as any)
         }}
-        className="w-full p-4 bg-red-600 rounded-lg font-bold"
+        style={{ width: '100%', padding: 16, backgroundColor: '#cc0000', color: '#fff', fontWeight: 'bold', borderRadius: 8, border: 'none', cursor: 'pointer' }}
       >
         Выйти из аккаунта
       </button>
     </div>
   )
-        }
+  }
