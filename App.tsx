@@ -1,8 +1,40 @@
 import { useState, useEffect } from 'react'
 import { MessageSquare, User as UserIcon, Settings, Send, Search } from 'lucide-react'
-import type { User, Message, Chat } from './types'
-import { supabase } from './lib/supabase'
-import { getRandomAvatar } from './lib/images'
+
+type User = {
+  id: string
+  email: string
+  name: string
+  password: string
+  avatar: string
+  bio: string
+  birthdate: string
+  isOnline: boolean
+  lastSeen: string
+  hideBirthdate: boolean
+}
+
+type Message = {
+  id: string
+  senderId: string
+  senderName: string
+  senderAvatar: string
+  recipientId: string
+  content: string
+  timestamp: string
+  status: 'sent' | 'delivered' | 'read'
+  deletedFor: string[]
+}
+
+type Chat = {
+  id: string
+  recipient: User
+  messages: Message[] | null
+}
+
+const getRandomAvatar = (id: string) => {
+  return `https://api.dicebear.com/7.x/avataaars/svg?seed=${id}&backgroundColor=random`
+}
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -33,150 +65,117 @@ export default function App() {
     setLoading(false)
   }
 
-  const handleLogin = async (email: string, password: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email)
-        .eq('password', password)
-        .single()
-      
-      if (error) throw error
-      
-      if (data) {
-        setUser(data)
-        localStorage.setItem('zero_auth', JSON.stringify(data))
-        setShowAuth(null)
-      } else {
-        alert('Неверный email или пароль')
-      }
-    } catch (e) {
-      console.error('Login error:', e)
-      alert('Ошибка входа')
-    }
-  }
-
-  const handleRegister = async (email: string, password: string, name: string) => {
-    try {
-      const { data: existing } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', email)
-        .single()
-      
-      if (existing) {
-        alert('Такой email уже зарегистрирован')
-        return
-      }
-
-      const randomId = Math.floor(1000 + Math.random() * 9000).toString()
-      
-      const newUser: User = {
-        id: randomId,
-        email,
-        name,
-        password,
-        avatar: getRandomAvatar(randomId),
-        bio: '',
-        birthdate: '',
-        isOnline: true,
-        lastSeen: new Date().toISOString(),
-        hideBirthdate: false
-      }
-
-      const { error } = await supabase
-        .from('users')
-        .insert(newUser)
-      
-      if (error) throw error
-
-      setUser(newUser)
-      localStorage.setItem('zero_auth', JSON.stringify(newUser))
+  const handleLogin = (email: string, password: string) => {
+    const users = JSON.parse(localStorage.getItem('zero_users') || '[]')
+    const found = users.find((u: User) => u.email === email && u.password === password)
+    
+    if (found) {
+      setUser(found)
+      localStorage.setItem('zero_auth', JSON.stringify(found))
       setShowAuth(null)
-    } catch (e) {
-      console.error('Register error:', e)
-      alert('Ошибка регистрации')
+    } else {
+      alert('Неверный email или пароль')
     }
   }
 
-  const handleSearch = async () => {
+  const handleRegister = (email: string, password: string, name: string) => {
+    const users = JSON.parse(localStorage.getItem('zero_users') || '[]')
+    
+    if (users.find((u: User) => u.email === email)) {
+      alert('Такой email уже зарегистрирован')
+      return
+    }
+
+    const randomId = Math.floor(1000 + Math.random() * 9000).toString()
+    
+    const newUser: User = {
+      id: randomId,
+      email,
+      name,
+      password,
+      avatar: getRandomAvatar(randomId),
+      bio: '',
+      birthdate: '',
+      isOnline: true,
+      lastSeen: new Date().toISOString(),
+      hideBirthdate: false
+    }
+
+    users.push(newUser)
+    localStorage.setItem('zero_users', JSON.stringify(users))
+    setUser(newUser)
+    localStorage.setItem('zero_auth', JSON.stringify(newUser))
+    setShowAuth(null)
+  }
+
+  const handleSearch = () => {
     if (!searchQuery || searchQuery.length !== 4) return
     
-    try {
-      const { data } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', searchQuery)
-        .limit(1)
-      
-      if (data && data.length > 0) {
-        setSearchResults([data[0]])
-      } else {
-        setSearchResults([])
-      }
-    } catch (e) {
-      console.error('Search error:', e)
+    const users = JSON.parse(localStorage.getItem('zero_users') || '[]')
+    const found = users.find((u: User) => u.id === searchQuery)
+    
+    if (found) {
+      setSearchResults([found])
+    } else {
+      setSearchResults([])
     }
   }
 
-  const handleChatSelect = (user: User) => {
+  const handleChatSelect = (targetUser: User) => {
+    const messages = JSON.parse(localStorage.getItem('zero_messages') || '[]')
+    const chatMessages = messages.filter((m: Message) => 
+      (m.senderId === user.id && m.recipientId === targetUser.id) ||
+      (m.senderId === targetUser.id && m.recipientId === user.id)
+    )
+    
     setSelectedChat({
-      id: `${user.id}-${user.name}`,
-      recipient: user,
-      messages: []
+      id: `${targetUser.id}-${targetUser.name}`,
+      recipient: targetUser,
+      messages: chatMessages
     })
     setTab('chats')
   }
 
-  const handleSendMessage = async () => {
+  const handleSendMessage = () => {
     if (!message.trim() || !selectedChat || !user) return
 
-    try {
-      const newMessage: Message = {
-        id: `${Date.now()}`,
-        senderId: user.id,
-        senderName: user.name,
-        senderAvatar: user.avatar,
-        recipientId: selectedChat.recipient.id,
-        content: message,
-        timestamp: new Date().toISOString(),
-        status: 'sent',
-        deletedFor: []
-      }
-
-      const { error } = await supabase
-        .from('messages')
-        .insert(newMessage)
-      
-      if (error) throw error
-
-      setMessage('')
-      setSelectedChat({
-        ...selectedChat,
-        messages: [...(selectedChat.messages || []), newMessage]
-      })
-    } catch (e) {
-      console.error('Send message error:', e)
+    const newMessage: Message = {
+      id: `${Date.now()}`,
+      senderId: user.id,
+      senderName: user.name,
+      senderAvatar: user.avatar,
+      recipientId: selectedChat.recipient.id,
+      content: message,
+      timestamp: new Date().toISOString(),
+      status: 'sent',
+      deletedFor: []
     }
+
+    const messages = JSON.parse(localStorage.getItem('zero_messages') || '[]')
+    messages.push(newMessage)
+    localStorage.setItem('zero_messages', JSON.stringify(messages))
+
+    setMessage('')
+    setSelectedChat({
+      ...selectedChat,
+      messages: [...(selectedChat.messages || []), newMessage]
+    })
   }
 
-  const handleDeleteMessage = async (msg: Message, option: 'me' | 'everyone') => {
-    try {
+  const handleDeleteMessage = (msg: Message, option: 'me' | 'everyone') => {
+    const messages = JSON.parse(localStorage.getItem('zero_messages') || '[]')
+    const index = messages.findIndex((m: Message) => m.id === msg.id)
+    
+    if (index !== -1) {
       const deletedFor = option === 'me' ? [...msg.deletedFor, user?.id] : []
       
-      const { error } = await supabase
-        .from('messages')
-        .update({ 
-          deletedFor,
-          content: option === 'everyone' ? 'Удалено' : msg.content
-        })
-        .eq('id', msg.id)
+      if (option === 'everyone') {
+        messages[index].content = 'Удалено'
+      } else {
+        messages[index].deletedFor = deletedFor
+      }
       
-      if (error) throw error
-
-      setDeleteOptions(null)
-      setShowMessageOptions(null)
+      localStorage.setItem('zero_messages', JSON.stringify(messages))
       
       if (selectedChat) {
         setSelectedChat({
@@ -188,9 +187,10 @@ export default function App() {
           )
         })
       }
-    } catch (e) {
-      console.error('Delete message error:', e)
     }
+    
+    setDeleteOptions(null)
+    setShowMessageOptions(null)
   }
 
   if (loading) {
@@ -219,19 +219,19 @@ export default function App() {
               <input
                 type="email"
                 placeholder="Email"
-                style={{ width: '100%', padding: 12, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', padding: '16px', fontSize: 16 }}
                 onKeyPress={(e) => {
                   if (e.key === 'Enter') {
-                    const target = e.target as HTMLInputElement
-                    const passwordInput = document.querySelector('input[type="password"]') as HTMLInputElement
-                    if (passwordInput) handleLogin(target.value, passwordInput.value)
+                    const email = (e.target as HTMLInputElement).value
+                    const password = (document.querySelector('input[type="password"]') as HTMLInputElement).value
+                    handleLogin(email, password)
                   }
                 }}
+                style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16, padding: 16 }}
               />
               <input
                 type="password"
                 placeholder="Пароль"
-                style={{ width: '100%', padding: 12, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', padding: '16px', fontSize: 16 }}
+                style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16, padding: 16 }}
               />
               <button
                 onClick={() => {
@@ -239,7 +239,7 @@ export default function App() {
                   const password = (document.querySelector('input[type="password"]') as HTMLInputElement).value
                   handleLogin(email, password)
                 }}
-                style={{ width: '100%', padding: 12, backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', padding: '16px', fontSize: 16, cursor: 'pointer' }}
+                style={{ width: '100%', backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', fontSize: 16, padding: 16, cursor: 'pointer' }}
               >
                 Войти
               </button>
@@ -256,17 +256,17 @@ export default function App() {
               <input
                 type="text"
                 placeholder="Имя"
-                style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', padding: '16px', fontSize: 16 }}
+                style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16, padding: 16 }}
               />
               <input
                 type="email"
                 placeholder="Email"
-                style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', padding: '16px', fontSize: 16 }}
+                style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16, padding: 16 }}
               />
               <input
                 type="password"
                 placeholder="Пароль"
-                style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', padding: '16px', fontSize: 16 }}
+                style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16, padding: 16 }}
               />
               <button
                 onClick={() => {
@@ -276,7 +276,7 @@ export default function App() {
                   const password = inputs[2].value
                   handleRegister(email, password, name)
                 }}
-                style={{ width: '100%', padding: 12, backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', padding: '16px', fontSize: 16, cursor: 'pointer' }}
+                style={{ width: '100%', backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', fontSize: 16, padding: 16, cursor: 'pointer' }}
               >
                 Зарегистрироваться
               </button>
@@ -304,13 +304,13 @@ export default function App() {
           </div>
           <button
             onClick={() => setShowAuth('login')}
-            style={{ width: '100%', padding: 12, backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', padding: '16px', fontSize: 16, cursor: 'pointer' }}
+            style={{ width: '100%', backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', fontSize: 16, padding: 16, cursor: 'pointer' }}
           >
             Вход
           </button>
           <button
             onClick={() => setShowAuth('register')}
-            style={{ width: '100%', padding: 12, backgroundColor: 'transparent', color: '#fff', fontWeight: 'bold', borderRadius: 8, border: '1px solid #fff', padding: '16px', fontSize: 16, cursor: 'pointer' }}
+            style={{ width: '100%', backgroundColor: 'transparent', color: '#fff', fontWeight: 'bold', borderRadius: 8, border: '1px solid #fff', fontSize: 16, padding: 16, cursor: 'pointer' }}
           >
             Регистрация
           </button>
@@ -348,7 +348,7 @@ export default function App() {
             </div>
             
             {(selectedChat.messages || []).map(m => {
-              if (m.content === 'Удалено' || m.deletedFor.includes(user.id)) return null
+              if (m.content === 'Удалено' || (m.deletedFor.includes(user.id))) return null
               return (
                 <div 
                   key={m.id}
@@ -372,7 +372,7 @@ export default function App() {
               )
             })}
             
-            {false && (
+            {(!selectedChat.messages || selectedChat.messages.length === 0) && (
               <div style={{ textAlign: 'center', color: '#666', marginTop: 32 }}>
                 <MessageSquare style={{ width: 48, height: 48, margin: '0 auto 16px' }} />
                 <p>Начните диалог</p>
@@ -406,7 +406,7 @@ export default function App() {
                 placeholder="Поиск по ID (4 цифры)"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                style={{ flex: 1, padding: 12, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16 }}
+                style={{ flex: 1, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16, padding: 12 }}
               />
               <button
                 onClick={handleSearch}
@@ -437,7 +437,7 @@ export default function App() {
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-              style={{ flex: 1, padding: 12, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16 }}
+              style={{ flex: 1, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16, padding: 12 }}
             />
             <button
               onClick={handleSendMessage}
@@ -527,21 +527,16 @@ function ProfilePage({ user, setUser }: { user: User, setUser: (u: User) => void
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState(user)
 
-  const handleSave = async () => {
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update(formData)
-        .eq('id', user.id)
-      
-      if (error) throw error
-
-      setUser(formData)
-      setEditing(false)
-      localStorage.setItem('zero_auth', JSON.stringify(formData))
-    } catch (e) {
-      console.error('Save profile error:', e)
-      alert('Ошибка сохранения')
+  const handleSave = () => {
+    setUser(formData)
+    setEditing(false)
+    localStorage.setItem('zero_auth', JSON.stringify(formData))
+    
+    const users = JSON.parse(localStorage.getItem('zero_users') || '[]')
+    const index = users.findIndex((u: User) => u.id === user.id)
+    if (index !== -1) {
+      users[index] = formData
+      localStorage.setItem('zero_users', JSON.stringify(users))
     }
   }
 
@@ -563,7 +558,7 @@ function ProfilePage({ user, setUser }: { user: User, setUser: (u: User) => void
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              style={{ width: '100%', padding: 12, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16 }}
+              style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16, padding: 12 }}
             />
           </div>
           <div>
@@ -571,7 +566,7 @@ function ProfilePage({ user, setUser }: { user: User, setUser: (u: User) => void
             <textarea
               value={formData.bio}
               onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
-              style={{ width: '100%', padding: 12, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', height: 80, resize: 'vertical' }}
+              style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', height: 80, resize: 'vertical', padding: 12 }}
             />
           </div>
           <div>
@@ -580,14 +575,14 @@ function ProfilePage({ user, setUser }: { user: User, setUser: (u: User) => void
               type="date"
               value={formData.birthdate}
               onChange={(e) => setFormData({ ...formData, birthdate: e.target.value })}
-              style={{ width: '100%', padding: 12, backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16 }}
+              style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16, padding: 12 }}
             />
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={handleSave} style={{ flex: 1, padding: 12, backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', cursor: 'pointer' }}>
+            <button onClick={handleSave} style={{ flex: 1, backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', fontSize: 16, padding: 12, cursor: 'pointer' }}>
               Сохранить
             </button>
-            <button onClick={() => setEditing(false)} style={{ flex: 1, padding: 12, backgroundColor: '#333', color: '#fff', borderRadius: 8, border: 'none', cursor: 'pointer' }}>
+            <button onClick={() => setEditing(false)} style={{ flex: 1, backgroundColor: '#333', color: '#fff', borderRadius: 8, border: 'none', fontSize: 16, padding: 12, cursor: 'pointer' }}>
               Отмена
             </button>
           </div>
@@ -621,7 +616,7 @@ function ProfilePage({ user, setUser }: { user: User, setUser: (u: User) => void
         </div>
         <button
           onClick={() => setEditing(true)}
-          style={{ width: '100%', padding: 12, backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', cursor: 'pointer' }}
+          style={{ width: '100%', backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', fontSize: 16, padding: 12, cursor: 'pointer' }}
         >
           Редактировать
         </button>
@@ -631,20 +626,16 @@ function ProfilePage({ user, setUser }: { user: User, setUser: (u: User) => void
 }
 
 function SettingsPage({ user, setUser }: { user: User, setUser: (u: User) => void }) {
-  const handleToggle = async (key: keyof User) => {
+  const handleToggle = (key: keyof User) => {
     const updated = { ...user, [key]: !user[key] }
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update(updated)
-        .eq('id', user.id)
-      
-      if (error) throw error
-
-      setUser(updated)
-      localStorage.setItem('zero_auth', JSON.stringify(updated))
-    } catch (e) {
-      console.error('Update settings error:', e)
+    setUser(updated)
+    localStorage.setItem('zero_auth', JSON.stringify(updated))
+    
+    const users = JSON.parse(localStorage.getItem('zero_users') || '[]')
+    const index = users.findIndex((u: User) => u.id === user.id)
+    if (index !== -1) {
+      users[index] = updated
+      localStorage.setItem('zero_users', JSON.stringify(users))
     }
   }
 
@@ -659,7 +650,7 @@ function SettingsPage({ user, setUser }: { user: User, setUser: (u: User) => voi
           onClick={() => handleToggle('hideBirthdate')}
           style={{ width: 48, height: 24, borderRadius: 12, backgroundColor: user.hideBirthdate ? '#fff' : '#333', border: 'none', cursor: 'pointer', position: 'relative' }}
         >
-          <div style={{ width: 20, height: 20, borderRadius: '50%', backgroundColor: '#000', position: 'absolute', top: 2, transition: 'all 0.2s', left: user.hideBirthdate ? 26 : 2 }} />
+          <div style={{ width: 20, height: 20, borderRadius: '50%', backgroundColor: '#000', position: 'absolute', top: 2, left: user.hideBirthdate ? 26 : 2 }} />
         </button>
       </div>
 
