@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { MessageSquare, User as UserIcon, Settings, Send, Search, Star } from 'lucide-react'
-import { firestore } from './firebase'
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, onAuthStateChanged, signOut } from 'firebase/auth'
+import { firestore, authRetry } from './firebase'
+import { getAuth, onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth'
 
 type User = {
   id: string
@@ -49,6 +49,7 @@ export default function App() {
   const [showMessageOptions, setShowMessageOptions] = useState<string | null>(null)
   const [deleteOptions, setDeleteOptions] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
   const messagesUnsubscribe = useRef<(() => void) | null>(null)
   const authUnsubscribe = useRef<(() => void) | null>(null)
 
@@ -84,9 +85,14 @@ export default function App() {
             lastSeen: new Date().toISOString(),
             hideBirthdate: false
           }
-          await firestore.createUser(firebaseUser.uid, newUser)
+          try {
+            await firestore.createUser(firebaseUser.uid, newUser)
+          } catch (e) {
+            console.warn('Create user error:', e)
+          }
           setUser(newUser)
         }
+        setShowAuth(null)
       } else {
         setUser(null)
       }
@@ -95,38 +101,87 @@ export default function App() {
   }
 
   const handleLogin = async (email: string, password: string) => {
+    setError('')
+    if (!email || !password) {
+      setError('Заполните все поля')
+      return
+    }
+
     try {
       const auth = getAuth()
-      const userCredential = await signInWithEmailAndPassword(auth, email, password)
       
-      // Получаем данные пользователя из Firestore
-      const userData = await firestore.getUser(userCredential.user.uid)
-      
-      if (userData) {
-        setUser(userData)
-        setShowAuth(null)
+      try {
+        const userCredential = await auth.signInWithEmailAndPassword(email, password)
+      } catch (networkError: any) {
+        // Если ошибка сети, пробуем повторить
+        if (networkError.code === 'auth/network-request-failed') {
+          console.log('Network error, retrying...')
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          await auth.signInWithEmailAndPassword(email, password)
+        } else {
+          throw networkError
+        }
       }
+      
+      // Данные пользователя загрузятся автоматически через onAuthStateChanged
+      // Показываем loading state пока загружаемся
+      setLoading(true)
+      
     } catch (e: any) {
       console.error('Login error:', e)
-      alert('Неверный email или пароль')
+      if (e.code === 'auth/network-request-failed') {
+        setError('Ошибка сети. Проверьте подключение к интернету и попробуйте снова.')
+      } else if (e.code === 'auth/user-not-found') {
+        setError('Пользователь с таким email не найден')
+      } else if (e.code === 'auth/wrong-password') {
+        setError('Неверный пароль')
+      } else if (e.code === 'auth/invalid-email') {
+        setError('Неверный email')
+      } else if (e.code === 'auth/invalid-credential') {
+        setError('Неверный email или пароль')
+      } else {
+        setError(e.message || 'Ошибка входа')
+      }
     }
   }
 
   const handleRegister = async (email: string, password: string, name: string) => {
+    setError('')
+    
+    if (!name || !email || !password) {
+      setError('Заполните все поля')
+      return
+    }
+
+    if (password.length < 6) {
+      setError('Пароль должен быть минимум 6 символов')
+      return
+    }
+
     try {
-      // Проверяем существующего пользователя по email
-      const existing = await firestore.getUserByEmail(email)
-      if (existing) {
-        alert('Такой email уже зарегистрирован')
-        return
+      const auth = getAuth()
+      let userCredential
+      
+      try {
+        userCredential = await auth.createUserWithEmailAndPassword(email, password)
+      } catch (networkError: any) {
+        // Если ошибка сети, пробуем повторить
+        if (networkError.code === 'auth/network-request-failed') {
+          console.log('Network error, retrying...')
+          await new Promise(resolve => setTimeout(resolve, 1000))
+          userCredential = await auth.createUserWithEmailAndPassword(email, password)
+        } else if (networkError.code === 'auth/email-already-in-use') {
+          setError('Такой email уже зарегистрирован')
+          return
+        } else {
+          throw networkError
+        }
       }
 
-      const auth = getAuth()
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
       const uid = userCredential.user.uid
       const searchId = Math.floor(1000 + Math.random() * 9000).toString()
       
-      await updateProfile(userCredential.user, { displayName: name })
+      await auth.currentUser?.updateProfile({ displayName: name })
       
       const newUser: User = {
         id: uid,
@@ -142,14 +197,29 @@ export default function App() {
       }
 
       // Сохраняем в Firestore
-      await firestore.createUser(uid, newUser)
+      try {
+        await firestore.createUser(uid, newUser)
+      } catch (e) {
+        console.warn('Create user firestore error:', e)
+      }
       
       // Сразу устанавливаем пользователя (моментальный вход)
       setUser(newUser)
       setShowAuth(null)
+      setLoading(false)
     } catch (e: any) {
       console.error('Register error:', e)
-      alert(e.message || 'Ошибка регистрации')
+      if (e.code === 'auth/network-request-failed') {
+        setError('Ошибка сети. Проверьте подключение к интернету и попробуйте снова.')
+      } else if (e.code === 'auth/email-already-in-use') {
+        setError('Такой email уже зарегистрирован')
+      } else if (e.code === 'auth/weak-password') {
+        setError('Пароль слишком слабый')
+      } else if (e.code === 'auth/invalid-email') {
+        setError('Неверный email')
+      } else {
+        setError(e.message || 'Ошибка регистрации')
+      }
     }
   }
 
@@ -158,6 +228,8 @@ export default function App() {
     
     if (searchQuery === '0000') {
       // Избранное - чат с самим собой
+      if (!user) return
+      
       setSearchResults([{
         id: 'favorites',
         searchId: 'favorites',
@@ -192,10 +264,15 @@ export default function App() {
         messages
       })
       setTab('chats')
-      // Загружаем сообщения для избранного (отправленные самому себе)
-      messagesUnsubscribe.current = firestore.getMessages(user?.id || '', 'favorites', (msgs) => {
-        setSelectedChat(prev => prev ? { ...prev, messages: msgs } : null)
-      })
+      
+      // Для избранного - загружаем сообщения которые отправлены самому себе
+      if (user) {
+        messagesUnsubscribe.current = firestore.getMessages(user.id, 'favorites', (msgs) => {
+          setTimeout(() => {
+            setSelectedChat(prev => prev ? { ...prev, messages: msgs } : null)
+          }, 100)
+        })
+      }
     } else {
       const messages: Message[] = []
       setSelectedChat({
@@ -214,12 +291,18 @@ export default function App() {
   const handleSendMessage = async () => {
     if (!message.trim() || !selectedChat || !user) return
 
+    // Для избранного - recipientCaption должен быть user.id, а не 'favorites'
+    let recipientId = selectedChat.recipient.id
+    if (selectedChat.recipient.id === 'favorites') {
+      recipientId = user.id // Отправляем сами себе
+    }
+
     const newMessage: Message = {
       id: '',
       senderId: user.id,
       senderName: user.name,
       senderAvatar: user.avatar,
-      recipientId: selectedChat.recipient.id === 'favorites' ? 'favorites' : selectedChat.recipient.id,
+      recipientId: recipientId,
       content: message,
       timestamp: new Date().toISOString(),
       status: 'sent',
@@ -227,21 +310,17 @@ export default function App() {
     }
 
     try {
-      if (selectedChat.recipient.id === 'favorites') {
-        // Для избранного - отправляем сами себе
-        newMessage.recipientId = user.id
-      }
-      
       await firestore.sendMessage(newMessage)
       setMessage('')
     } catch (e) {
       console.error('Send message error:', e)
+      setError('Ошибка отправки сообщения')
     }
   }
 
   const handleDeleteMessage = async (msg: Message, option: 'me' | 'everyone') => {
     try {
-      const deletedFor = option === 'me' ? [...msg.deletedFor, user?.id] : []
+      const deletedFor = option === 'me' ? [...msg.deletedFor, user?.id || ''] : []
       
       if (option === 'everyone') {
         await firestore.updateMessage(msg.id, { 
@@ -260,11 +339,15 @@ export default function App() {
   }
 
   const handleLogout = async () => {
-    if (messagesUnsubscribe.current) messagesUnsubscribe.current()
-    if (authUnsubscribe.current) authUnsubscribe.current()
-    const auth = getAuth()
-    await signOut(auth)
-    setUser(null)
+    try {
+      if (messagesUnsubscribe.current) messagesUnsubscribe.current()
+      if (authUnsubscribe.current) authUnsubscribe.current()
+      const auth = getAuth()
+      await firebaseSignOut(auth)
+      setUser(null)
+    } catch (e) {
+      console.error('Logout error:', e)
+    }
   }
 
   if (loading) {
@@ -287,6 +370,12 @@ export default function App() {
             <h1 style={{ fontSize: 32, fontWeight: 'bold' }}>Zero Messenger</h1>
           </div>
           
+          {error && (
+            <div style={{ backgroundColor: '#330000', color: '#ff6666', padding: 12, marginBottom: 16, borderRadius: 8, border: '1px solid #660000' }}>
+              {error}
+            </div>
+          )}
+          
           {showAuth === 'login' ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <h2 style={{ fontSize: 20, fontWeight: 'bold', textAlign: 'center' }}>Вход</h2>
@@ -295,9 +384,8 @@ export default function App() {
                 placeholder="Email"
                 onKeyPress={(e) => {
                   if (e.key === 'Enter') {
-                    const email = (e.target as HTMLInputElement).value
-                    const password = (document.querySelector('input[type="password"]') as HTMLInputElement).value
-                    if (email && password) handleLogin(email, password)
+                    const password = (document.querySelector('input[type="password"]') as HTMLInputElement)?.value
+                    if (password) handleLogin((e.target as HTMLInputElement).value, password)
                   }
                 }}
                 style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16, padding: 16 }}
@@ -307,17 +395,16 @@ export default function App() {
                 placeholder="Пароль"
                 onKeyPress={(e) => {
                   if (e.key === 'Enter') {
-                    const email = (document.querySelector('input[type="email"]') as HTMLInputElement).value
-                    const password = (e.target as HTMLInputElement).value
-                    if (email && password) handleLogin(email, password)
+                    const email = (document.querySelector('input[type="email"]') as HTMLInputElement)?.value
+                    if (email) handleLogin(email, (e.target as HTMLInputElement).value)
                   }
                 }}
                 style={{ width: '100%', backgroundColor: '#111', border: '1px solid #333', borderRadius: 8, color: '#fff', fontSize: 16, padding: 16 }}
               />
               <button
                 onClick={() => {
-                  const email = (document.querySelector('input[type="email"]') as HTMLInputElement).value
-                  const password = (document.querySelector('input[type="password"]') as HTMLInputElement).value
+                  const email = (document.querySelector('input[type="email"]') as HTMLInputElement)?.value || ''
+                  const password = (document.querySelector('input[type="password"]') as HTMLInputElement)?.value || ''
                   handleLogin(email, password)
                 }}
                 style={{ width: '100%', backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', fontSize: 16, padding: 16, cursor: 'pointer' }}
@@ -326,7 +413,7 @@ export default function App() {
               </button>
               <p style={{ textAlign: 'center', color: '#666' }}>
                 Нет аккаунта?{' '}
-                <button onClick={() => setShowAuth('register')} style={{ color: '#fff', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}>
+                <button onClick={() => { setShowAuth('register'); setError('') }} style={{ color: '#fff', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}>
                   Зарегистрироваться
                 </button>
               </p>
@@ -352,17 +439,9 @@ export default function App() {
               <button
                 onClick={() => {
                   const inputs = document.querySelectorAll('input')
-                  const name = inputs[0].value
-                  const email = inputs[1].value
-                  const password = inputs[2].value
-                  if (!name || !email || !password) {
-                    alert('Заполните все поля')
-                    return
-                  }
-                  if (password.length < 6) {
-                    alert('Пароль должен быть минимум 6 символов')
-                    return
-                  }
+                  const name = (inputs[0] as HTMLInputElement)?.value || ''
+                  const email = (inputs[1] as HTMLInputElement)?.value || ''
+                  const password = (inputs[2] as HTMLInputElement)?.value || ''
                   handleRegister(email, password, name)
                 }}
                 style={{ width: '100%', backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', fontSize: 16, padding: 16, cursor: 'pointer' }}
@@ -371,7 +450,7 @@ export default function App() {
               </button>
               <p style={{ textAlign: 'center', color: '#666' }}>
                 Есть аккаунт?{' '}
-                <button onClick={() => setShowAuth('login')} style={{ color: '#fff', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}>
+                <button onClick={() => { setShowAuth('login'); setError('') }} style={{ color: '#fff', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}>
                   Войти
                 </button>
               </p>
@@ -392,13 +471,13 @@ export default function App() {
             <p style={{ color: '#666', marginTop: 8 }}>Мессенджер в черно-белом стиле</p>
           </div>
           <button
-            onClick={() => setShowAuth('login')}
+            onClick={() => { setShowAuth('login'); setError('') }}
             style={{ width: '100%', backgroundColor: '#fff', color: '#000', fontWeight: 'bold', borderRadius: 8, border: 'none', fontSize: 16, padding: 16, cursor: 'pointer' }}
           >
             Вход
           </button>
           <button
-            onClick={() => setShowAuth('register')}
+            onClick={() => { setShowAuth('register'); setError('') }}
             style={{ width: '100%', backgroundColor: 'transparent', color: '#fff', fontWeight: 'bold', borderRadius: 8, border: '1px solid #fff', fontSize: 16, padding: 16, cursor: 'pointer' }}
           >
             Регистрация
@@ -519,7 +598,7 @@ export default function App() {
                 onClick={handleSearch}
                 style={{ padding: 12, backgroundColor: '#fff', color: '#000', borderRadius: 8, border: 'none', cursor: 'pointer' }}
               >
-                <Search style={{ width: 20, height: 20 }} />
+                <Search style={{ width: 20, height: 20 }}
               </button>
             </div>
             
