@@ -1,6 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getFirestore } from 'firebase/firestore'
-import { doc, setDoc, getDoc, getDocs, collection, query, where, onSnapshot, addDoc, updateDoc, arrayUnion, deleteDoc } from 'firebase/firestore'
+import { getFirestore, doc, setDoc, getDoc, getDocs, collection, query, where, onSnapshot, addDoc, updateDoc } from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: "AIzaSyD57XFZAt9SWHQ2WRAXztugYo1P6U2_XvE",
@@ -15,30 +14,43 @@ const app = initializeApp(firebaseConfig)
 export const db = getFirestore(app)
 
 export const firestore = {
-  // User operations
-  createUser: async (user: any) => {
-    const userRef = doc(db, 'users', user.id)
-    await setDoc(userRef, { ...user, lastSeen: new Date().toISOString() })
+  createUser: async (uid: string, user: any) => {
+    const userRef = doc(db, 'users', uid)
+    await setDoc(userRef, { ...user, id: uid, createdAt: new Date().toISOString() })
   },
   
   getUser: async (userId: string) => {
     const docRef = doc(db, 'users', userId)
     const docSnap = await getDoc(docRef)
-    return docSnap.exists() ? docSnap.data() : null
+    if (docSnap.exists()) {
+      return { id: docSnap.id, ...docSnap.data() }
+    }
+    return null
+  },
+  
+  getUserBySearchId: async (searchId: string) => {
+    const q = query(collection(db, 'users'), where('searchId', '==', searchId))
+    const querySnapshot = await getDocs(q)
+    if (!querySnapshot.empty) {
+      return { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() }
+    }
+    return null
   },
   
   getUserByEmail: async (email: string) => {
     const q = query(collection(db, 'users'), where('email', '==', email))
     const querySnapshot = await getDocs(q)
-    return !querySnapshot.empty ? querySnapshot.docs[0].data() : null
+    if (!querySnapshot.empty) {
+      return { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() }
+    }
+    return null
   },
   
-  updateUser: async (user: any) => {
-    const userRef = doc(db, 'users', user.id)
-    await updateDoc(userRef, user)
+  updateUser: async (uid: string, data: any) => {
+    const userRef = doc(db, 'users', uid)
+    await updateDoc(userRef, data)
   },
   
-  // Message operations
   sendMessage: async (message: any) => {
     await addDoc(collection(db, 'messages'), message)
   },
@@ -60,9 +72,5 @@ export const firestore = {
   updateMessage: async (messageId: string, updates: any) => {
     const msgRef = doc(db, 'messages', messageId)
     await updateDoc(msgRef, updates)
-  },
-  
-  deleteMessage: async (messageId: string) => {
-    await deleteDoc(doc(db, 'messages', messageId))
   }
-  }
+      }
